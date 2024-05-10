@@ -23,11 +23,14 @@ def create_checkout_session(request,id):
     request_data = json.loads(request.body)
     product = Product.objects.get(id=id)
     stripe.api_key = settings.STRIPE_SECRET_KEY
-    stripePayemntIntent = stripe.PaymentIntent.create(
-        amount = int(product.price * 100),
-        currency = 'usd',
+    
+    # Create a PaymentIntent
+    payment_intent = stripe.PaymentIntent.create(
+        amount=int(product.price * 100),  # Amount in cents
+        currency='usd',
         metadata={'integration_check': 'accept_a_payment'},
     )
+    
     checkout_session = stripe.checkout.Session.create(
         customer_email = request_data['email'],
         payment_method_types = ['card'],
@@ -50,11 +53,12 @@ def create_checkout_session(request,id):
         
     )
     
+    # Create an OrderDetail instance
     order = OrderDetail.objects.create(
-        customer_email = request_data['email'],
-        product = product,
-        stripe_payment_intent = stripePayemntIntent['id'],
-        amount =  int(product.price),
+        customer_email=request_data['email'],
+        product=product,
+        stripe_payment_intent=payment_intent.id,
+        amount=int(product.price),
     )
     
     order.save()
@@ -68,11 +72,12 @@ def payment_success_view(request):
         return HttpResponseNotFound()
     stripe.api_key = settings.STRIPE_SECRET_KEY
     session = stripe.checkout.Session.retrieve(session_id)
-    order = get_object_or_404(OrderDetail, stripe_payment_intent = session.payment_intent)
-    order.has_paid = True
+    payment_intent_id = session.payment_intent
+    order = get_object_or_404(OrderDetail,stripe_payment_intent= payment_intent_id)
+    order.has_paid=True
     order.save()
     
-    return render(request, "myapp/payment_success.html", {'order': order})
+    return render(request,'myapp/payment_success.html',{'order':order})
 
 
 def payment_failed_view(request):
